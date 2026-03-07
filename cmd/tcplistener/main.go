@@ -4,9 +4,17 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
+	"unicode"
 
 	"gowebserver/internal/request"
 )
+
+func IsLetter(s string) bool {
+	return !strings.ContainsFunc(s, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsUpper(r)
+	})
+}
 
 // func getLinesChannel(f io.ReadCloser) <-chan string {
 // 	ch := make(chan string)
