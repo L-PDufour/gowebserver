@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -14,6 +15,7 @@ import (
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body        []byte
 	state       int
 }
 
@@ -26,6 +28,7 @@ type RequestLine struct {
 const (
 	requestStateInitialized = iota
 	requestStateParsingHeaders
+	requestStateParsingBody
 	requestStateDone
 )
 
@@ -42,8 +45,18 @@ func NewRequest() *Request {
 	}
 }
 
-func (r RequestLine) String() string {
-	return fmt.Sprintf("Request line:\n- Method: %s\n- Target: %s\n- Version: %s", r.Method, r.RequestTarget, r.HttpVersion)
+func (r Request) String() string {
+	headers := ""
+	for key, value := range r.Headers {
+		headers += fmt.Sprintf("\n- %s: %s", key, value)
+	}
+	return fmt.Sprintf("Request line:\n- Method: %s\n- Target: %s\n- Version: %s\nHeaders:%s\nBody:\n%s",
+		r.RequestLine.Method,
+		r.RequestLine.RequestTarget,
+		r.RequestLine.HttpVersion,
+		headers,
+		r.Body,
+	)
 }
 
 func IsLetter(s string) bool {
@@ -80,17 +93,35 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 		r.state = requestStateParsingHeaders // ← transition to done
 		r.RequestLine = *line
 		return n, nil
-	case requestStateDone: // ← error when already done
-		return 0, fmt.Errorf("error: trying to read data in a done state")
 	case requestStateParsingHeaders:
 		n, done, err := r.Headers.Parse(data)
 		if err != nil {
 			return 0, err
 		}
 		if done {
-			r.state = requestStateDone
+			r.state = requestStateParsingBody
 		}
 		return n, nil
+	case requestStateParsingBody:
+		val := r.Headers.Get("content-length")
+		if val == "" {
+			r.state = requestStateDone
+			return 0, nil
+		}
+		length, err := strconv.Atoi(val)
+		if err != nil {
+			return 0, err
+		}
+		r.Body = append(r.Body, data...)
+		if len(r.Body) > length {
+			return 0, fmt.Errorf("error: body bigger than content-length")
+		}
+		if len(r.Body) == length {
+			r.state = requestStateDone
+		}
+		return len(data), nil
+	case requestStateDone: // ← error when already done
+		return 0, fmt.Errorf("error: trying to read data in a done state")
 	default:
 		return 0, fmt.Errorf("error: unknown state")
 	}

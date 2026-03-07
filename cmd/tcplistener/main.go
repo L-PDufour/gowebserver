@@ -61,7 +61,7 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		fmt.Printf("%s\n", r.RequestLine)
+		fmt.Printf("%s\n", r)
 		fmt.Printf("connection closed\n")
 	}
 }
