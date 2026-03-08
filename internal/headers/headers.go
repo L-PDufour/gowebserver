@@ -45,14 +45,27 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	if !IsValidHeaderKey(key) {
 		return 0, false, fmt.Errorf("invalid character: %s", key)
 	}
-	if existing := h[key]; existing != "" {
-		h[key] = existing + ", " + string(value)
-	} else {
-		h[key] = string(value)
-	}
+	h.Add(key, string(value))
 	return idx + 2, false, nil
 }
 
 func (h Headers) Get(key string) string {
 	return h[key]
+}
+
+func (h Headers) Set(key, value string) {
+	h[key] = value
+}
+
+func (h Headers) Add(key, value string) {
+	if existing, ok := h[key]; ok {
+		h[key] = existing + ", " + value
+	} else {
+		h.Set(key, value)
+	}
+}
+
+func (h Headers) Delete(key string) {
+
+	delete(h, key)
 }

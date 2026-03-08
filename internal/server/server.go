@@ -3,18 +3,24 @@ package server
 import (
 	"fmt"
 	"net"
+
+	"gowebserver/internal/request"
+	"gowebserver/internal/response"
 )
 
 type Server struct {
 	listener net.Listener
+	handler  Handler
 }
 
-func Serve(port int) (*Server, error) {
+type Handler func(w *response.Writer, req *request.Request)
+
+func Serve(port int, h Handler) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
 	}
-	server := &Server{listener: listener}
+	server := &Server{listener: listener, handler: h}
 	go server.listen()
 	return server, nil
 }
@@ -28,6 +34,7 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) listen() {
+
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
@@ -38,6 +45,17 @@ func (s *Server) listen() {
 }
 
 func (s *Server) handle(conn net.Conn) {
-	conn.Write([]byte("HTTP/1.1 200 OK \r\nContent-Type: text/plain \r\nHello World!\r\n\r\n"))
-	conn.Close()
+	defer conn.Close()
+	r, err := request.RequestFromReader(conn)
+	if err != nil {
+		w := response.NewWriter(conn)
+		w.WriteStatusLine(response.StatusBadRequest)
+		h := response.GetDefaultHeaders(len(err.Error()))
+		h.Set("Content-Type", "text/html")
+		w.WriteHeaders(h)
+		w.WriteBody([]byte(err.Error()))
+		return
+	}
+	w := response.NewWriter(conn)
+	s.handler(w, r)
 }
